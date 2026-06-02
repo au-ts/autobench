@@ -4,13 +4,11 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-TS_AUTOBENCH_VERSION = main
-TS_AUTOBENCH_SITE = https://github.com/au-ts/autobench.git
+TS_AUTOBENCH_SITE = git@github.com:au-ts/autobench.git
 TS_AUTOBENCH_SITE_METHOD = git
 
 # note: this MUST match config.in
-TS_AUTOBENCH_DEPENDENCIES = python3 python-lxml iperf3 iperf ipbench2
-
+TS_AUTOBENCH_DEPENDENCIES = python3 python-lxml iperf3 iperf
 # gather target platform cross-compile toolchain
 define TS_AUTOBENCH_BUILD_CMDS
 	$(TARGET_MAKE_ENV) $(MAKE) -C $(@D) \

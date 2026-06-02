@@ -8,15 +8,10 @@ BUILD_DIR = build
 CFLAGS = -Wall -Werror -O3
 LDFLAGS += -lpthread
 
-all: $(BUILD_DIR)/C_FILES
+all: cpu_usage
 
-$(BUILD_DIR):
-	mkdir -p $@
-
-$(BUILD_DIR)/%: %.c | $(BUILD_DIR)
+%.c: | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-	cp $@ $(BUILD_DIR)/../
 
 clean::
-	rm -f build/*
-
+	rm -f cpu_usage

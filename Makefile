@@ -4,10 +4,16 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-EXPERIMENT_MAKEFILES := $(wildcard experiments/*/Makefile) \
-                        $(wildcard experiments/*/*/Makefile)
+_ALL_MAKEFILES := $(wildcard experiments/*/Makefile) \
+                  $(wildcard experiments/*/*/Makefile) \
+                  $(wildcard experiments/*/*/*/Makefile)
 EXPERIMENT_DIRS      := $(sort $(dir $(EXPERIMENT_MAKEFILES)))
 
+# remove template
+_EXPERIMENT_MAKEFILES := $(filter-out %/template/Makefile %/template/%/Makefile, \
+                         $(_ALL_MAKEFILES))
+
+EXPERIMENT_DIRS := $(sort $(dir $(_EXPERIMENT_MAKEFILES)))
 .PHONY: all clean $(EXPERIMENT_DIRS)
 
 all: $(EXPERIMENT_DIRS)
