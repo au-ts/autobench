@@ -1,0 +1,42 @@
+{
+    "opcodes": {
+        "1": [
+            "hello",
+            "0"
+        ],
+        "2": [
+            "start_test",
+            "2"
+        ],
+        "3": [
+            "stop",
+            "0"
+        ],
+        "4": [
+            "test_exit",
+            "1"
+        ]
+    },
+    "tests": [
+            [
+                "ipbench_old_udp",
+                "experiments/ipbenchold/udp"
+            ],
+            [
+                "ipbench_old_tcp",
+                "experiments/ipbenchold/tcp"
+            ],
+            [
+                "iperf2_udp",
+                "experiments/iperf2/udp"
+            ],
+            [
+                "iperf2_tcp",
+                "experiments/iperf2/tcp"
+            ],
+            [
+                "iperf3",
+                "experiments/iperf3/"
+            ]
+    ]
+}

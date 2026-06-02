@@ -1,0 +1,14 @@
+config BR2_PACKAGE_TS_AUTOBENCH
+	bool "ts_autobench"
+	depends on BR2_TOOLCHAIN_HAS_THREADS
+	select BR2_PACKAGE_PYTHON_LXML
+	select BR2_PACKAGE_PYTHON3
+    select BR2_PACKAGE_IPERF3
+    select BR2_PACKAGE_IPERF
+    select BR2_PACKAGE_IPBENCH2
+	select BR2_PACKAGE_HOST_PYTHON3
+	select BR2_PACKAGE_HOST_SWIG
+	help
+	  A minimal test control program used to script automatic benchmarking of Linux systems.
+
+	  https://github.com/au-ts/autobench
