@@ -7,7 +7,6 @@
 _ALL_MAKEFILES := $(wildcard experiments/*/Makefile) \
                   $(wildcard experiments/*/*/Makefile) \
                   $(wildcard experiments/*/*/*/Makefile)
-EXPERIMENT_DIRS      := $(sort $(dir $(EXPERIMENT_MAKEFILES)))
 
 # remove template
 _EXPERIMENT_MAKEFILES := $(filter-out %/template/Makefile %/template/%/Makefile, \
