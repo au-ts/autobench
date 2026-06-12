@@ -32,12 +32,28 @@ define TS_AUTOBENCH_INSTALL_TARGET_CMDS
 	# otherwise it would be a broken absolute
 	# symlink on the target.  The .git directory is excluded for obvious reasons
 	tar -C $(@D) -h --exclude='.git' -cf - . | \
-		tar -C $(TARGET_DIR)/usr/share/ts_autobench -xf -
+		tar -C $(TARGET_DIR)/ts_autobench -xf -
 
 	# Ensure controlplane scripts and experiment runners are executable.
 	find $(TARGET_DIR)/usr/share/ts_autobench -type f \
 		\( -name "*.sh" -o -name "*.py" \) \
 		-exec chmod 0755 {} +
+endef
+
+# init script: just do basics we always want for benchmarks
+define TS_AUTOBENCH_GENERATE_INIT_SCRIPT
+	#!/bin/sh
+	# ts_autobench startup script - runs at boot as S99ts_autobench
+
+	# 1. Run udhcpc and wait for it to complete
+	udhcpc -n -i
+	# -n flag makes udhcpc exit immediately if it fails to obtain a lease
+
+	# print ip addr
+	ip addr
+
+	# 3. Run ipbenchd
+	/usr/share/ts_autobench/ipbenchd --target &
 endef
 
 $(eval $(generic-package))
