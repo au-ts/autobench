@@ -53,7 +53,7 @@ define TS_AUTOBENCH_GENERATE_INIT_SCRIPT
 	ip addr
 
 	# 3. Run ipbenchd
-	/usr/share/ts_autobench/ipbenchd --target &
+	ipbenchd --target &
 endef
 
 $(eval $(generic-package))
