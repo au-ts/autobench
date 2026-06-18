@@ -33,11 +33,6 @@ define TS_AUTOBENCH_INSTALL_TARGET_CMDS
 	# symlink on the target.  The .git directory is excluded for obvious reasons
 	tar -C $(@D) -h --exclude='.git' -cf - . | \
 		tar -C $(TARGET_DIR)/ts_autobench -xf -
-
-	# Ensure controlplane scripts and experiment runners are executable.
-	find $(TARGET_DIR)/usr/share/ts_autobench -type f \
-		\( -name "*.sh" -o -name "*.py" \) \
-		-exec chmod 0755 {} +
 endef
 
 # init script: just do basics we always want for benchmarks
