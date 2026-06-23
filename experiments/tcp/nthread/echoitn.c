@@ -14,6 +14,33 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+/**
+ *  This needs to work differently than UDP - Linux will magically distribute
+ *  UDP load across multiple readers of the same FD with recvfrom() but it's
+ *  not so simple with TCP.
+ *
+ *  TCP connections bind to a single FD after accept()ing and concurrent reads and
+ *  writes to that FD will race.
+ *
+ *  We use two features to get around this:
+ *
+ *  1. We use EPOLLEXCLUSIVE to make sure the kernel only wakes one waiting thread
+ *     per arriving packet.
+ *
+ *  2. We use EPOLLONESHOT on sockets to prevent two threads from racing on the stream ..
+ *     the FD is disabled until rearmed with EPOLL_CTL_MOD which ensures mutual exclusion.
+ *
+ *  This specific implementation is a bit of an abomination and mostly exists for parity
+ *  with the UDP tests. "single-socket" multithreaded tests are a bit spooky in both
+ *  cases but it tells us something interesting about how Linux can behave anyway.
+ *
+ *  For sane multi-thread/process testing (using separate connections) we will
+ *  need to add new ipbench features; at best we can have as many connections as
+ *  ipbench test clients for now (10 in our server room), which isn't very informative
+ *  or interesting. ... that's to say, it can't just be a random echo server and
+ *  will instead be a new controller + client + target test.
+ */
+
 #define MAX_EVENTS    16
 #define RECV_BUF_SIZE 4096
 
@@ -44,23 +71,21 @@ static void on_recv_available(int fd)
     ssize_t len = recv(fd, buf, RECV_BUF_SIZE, 0);
 
     if (len < 0) {
-        /* Spurious wakeup on a non-blocking socket: just re-arm. */
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            goto rearm;
+        if (errno == EINTR)
+            goto rearm;            /* retry on next wakeup */
         perror("recv");
-        drop_connection(fd); /* don't take down the whole server */
+        drop_connection(fd);
         return;
     } else if (len == 0) {
-        /* Orderly shutdown. EPOLLRDHUP normally beats us to it,
-           hence the original's "should never be printed" note. */
         printf("tcp_echo: disconnect (recv returned 0)\n");
         drop_connection(fd);
         return;
     }
 
-    /* Echo it all back. send() on a blocking-style stream may short-write. */
+    /* Blocking socket: send() queues the whole buffer (handle short writes
+       only from EINTR).*/
     for (ssize_t off = 0; off < len; ) {
-        ssize_t n = send(fd, buf + off, (size_t)(len - off), 0);
+        ssize_t n = send(fd, buf + off, (size_t)(len - off), MSG_NOSIGNAL);
         if (n < 0) {
             if (errno == EINTR)
                 continue;
@@ -81,6 +106,7 @@ rearm:
     }
 }
 
+
 static void accept_new_connections(void)
 {
     for (;;) {
@@ -99,14 +125,7 @@ static void accept_new_connections(void)
 
         char ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &conn_sa.sin_addr, ip, sizeof ip);
-        /* NB: original printed sin_port without ntohs(); kept for parity. */
         printf("tcp_echo[%s:%d]: accept\n", ip, conn_sa.sin_port);
-
-        if (set_nonblocking(conn_sock)) {
-            perror("set_nonblocking(conn_sock)");
-            close(conn_sock);
-            continue;
-        }
 
         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, conn_sock, &(struct epoll_event){
                 .events = CONN_EVENTS,
