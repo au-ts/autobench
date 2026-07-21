@@ -8,6 +8,10 @@
 #include <sys/epoll.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
+
+// TS: we add fctnl / replace accept4 and other gnu stuff so we can compile
+// w/o static lib references
 
 #define BACKLOG 512
 #define MAX_EVENTS 128
@@ -21,7 +25,7 @@ int main(int argc, char *argv[])
     if (argc < 2) {
         printf("Please give a port number: ./epoll_echo_server [port]\n");
         exit(0);
-    } 
+    }
 
 	// some variables we need
 	int portno = strtol(argv[1], NULL, 10);
@@ -42,7 +46,7 @@ int main(int argc, char *argv[])
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(portno);
 	server_addr.sin_addr.s_addr = INADDR_ANY;
-	
+
 
 	// bind socket and listen for connections
 	if (bind(sock_listen_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
@@ -56,7 +60,7 @@ int main(int argc, char *argv[])
 
 	struct epoll_event ev, events[MAX_EVENTS];
 	int new_events, sock_conn_fd, epollfd;
-	
+
 	epollfd = epoll_create(MAX_EVENTS);
 	if (epollfd < 0)
 	{
@@ -73,7 +77,7 @@ int main(int argc, char *argv[])
 	while(1)
 	{
 		new_events = epoll_wait(epollfd, events, MAX_EVENTS, -1);
-		
+
 		if (new_events == -1)
 		{
 			error("Error in epoll_wait..\n");
@@ -83,13 +87,22 @@ int main(int argc, char *argv[])
 		{
 			if (events[i].data.fd == sock_listen_fd)
 			{
-				sock_conn_fd = accept4(sock_listen_fd, (struct sockaddr *)&client_addr, &client_len, SOCK_NONBLOCK);
+				sock_conn_fd = accept(sock_listen_fd, (struct sockaddr *)&client_addr, &client_len);
 				if (sock_conn_fd == -1)
 				{
 					error("Error accepting new connection..\n");
 				}
 
-				ev.events = EPOLLIN | EPOLLET;
+                // ts: set non-blocking
+                int fl = fcntl(sock_conn_fd, F_GETFL, 0);
+                if (fl < 0 || fcntl(sock_conn_fd, F_SETFL, fl | O_NONBLOCK) < 0) {
+                    // dead!
+                    close(sock_listen_fd);
+                    error("failed to make socket non-blocking with fcntl!!");
+                }
+
+				// ev.events = EPOLLIN | EPOLLET;
+				ev.events = EPOLLIN;    // edge triggering is borking things??
 				ev.data.fd = sock_conn_fd;
 				if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sock_conn_fd, &ev) == -1)
 				{

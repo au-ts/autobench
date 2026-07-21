@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define BATCH     64
+#define MAX_BATCH     64
 #define MSG_SIZE  2048
 
 static int set_nonblocking(int fd) {
@@ -17,43 +17,29 @@ static int set_nonblocking(int fd) {
     return fl < 0 ? -1 : fcntl(fd, F_SETFL, fl | O_NONBLOCK);
 }
 
+static int set_blocking(int fd) {
+    int fl = fcntl(fd, F_GETFL, 0);
+    return fl < 0 ? -1 : fcntl(fd, F_SETFL, fl & ~O_NONBLOCK);
+}
+
 int main(int argc, const char *argv[]) {
-    if (argc != 2) {
-        // printf("usage: (port) (nthreads)\n");
-        printf("usage: (port)\n");
+    if (argc != 3) {
+        printf("usage: (port) (batch_size) [max=%d]\n", MAX_BATCH);
         exit(-1);
     }
     uint16_t port = atoi(argv[1]);
-    // int nthreads  = atoi(argv[2]);
-    // printf("starting on port %u with %d threads\n", port, nthreads);
-
+    int batch = atoi(argv[2]);
+    if (batch < 1 || batch >= MAX_BATCH) {
+        printf("batch size must be between 1 and %d!\n", MAX_BATCH);
+        exit(-1);
+    }
     int efd = epoll_create1(EPOLL_CLOEXEC);
 
-    // // One socket per thread
-    // int *socks = calloc(nthreads, sizeof *socks);
-    // for (int i = 0; i < nthreads; i++) {
-    //     int s = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
-    //     int one = 1;
-    //     setsockopt(s, SOL_SOCKET, SO_REUSEPORT, &one, sizeof one);
-    //     int rcvbuf = 4 * 1024 * 1024;
-    //     setsockopt(s, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf);
-    //     struct sockaddr_in sa = {
-    //         .sin_family = AF_INET,
-    //         .sin_port = htons(port),
-    //         .sin_addr.s_addr = INADDR_ANY,
-    //     };
-    //     bind(s, (struct sockaddr *)&sa, sizeof sa);
-    //     set_nonblocking(s);
-    //     epoll_ctl(efd, EPOLL_CTL_ADD, s,
-    //               &(struct epoll_event){
-    //                   .events = EPOLLIN | EPOLLET,
-    //                   .data.fd = s,
-    //               });
-    //     socks[i] = s;
-    // }
     int rcvbuf = 4 * 1024 * 1024;
+    int sndbuf = 4 * 1024 * 1024;
     int s = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
     setsockopt(s, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf);
+    setsockopt(s, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof sndbuf);
     struct sockaddr_in sa = {
         .sin_family = AF_INET,
         .sin_port = htons(port),
@@ -67,14 +53,13 @@ int main(int argc, const char *argv[]) {
                   .data.fd = s,
               });
 
-    // preallocate batch buffers
-    struct mmsghdr msgs[BATCH];
-    struct iovec   iovecs[BATCH];
-    char           buffers[BATCH][MSG_SIZE];
-    struct sockaddr_in peer_addrs[BATCH];
+    struct mmsghdr msgs[MAX_BATCH];
+    struct iovec   iovecs[MAX_BATCH];
+    char           buffers[MAX_BATCH][MSG_SIZE];
+    struct sockaddr_in peer_addrs[MAX_BATCH];
 
     memset(msgs, 0, sizeof msgs);
-    for (int i = 0; i < BATCH; i++) {
+    for (int i = 0; i < batch; i++) {
         iovecs[i].iov_base = buffers[i];
         iovecs[i].iov_len  = MSG_SIZE;
         msgs[i].msg_hdr.msg_iov     = &iovecs[i];
@@ -89,7 +74,7 @@ int main(int argc, const char *argv[]) {
         for (int i = 0; i < n; i++) {
             int s = evs[i].data.fd;
             for (;;) {
-                int r = recvmmsg(s, msgs, BATCH, MSG_DONTWAIT, NULL);
+                int r = recvmmsg(s, msgs, batch, MSG_DONTWAIT, NULL);
                 if (r <= 0) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) break;
                     if (errno == EINTR) continue;
@@ -97,8 +82,33 @@ int main(int argc, const char *argv[]) {
                 }
                 for (int j = 0; j < r; j++)
                     iovecs[j].iov_len = msgs[j].msg_len;
-                sendmmsg(s, msgs, r, 0);
-                // reset iovec
+
+                int sent = 0;
+                while (sent < r) {
+                    int k = sendmmsg(s, &msgs[sent], r - sent, MSG_DONTWAIT);
+                    if (k < 0) {
+                        if (errno == EINTR) continue;
+                        if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+                        break;
+                    }
+                    sent += k;
+                }
+
+                // if we fail to non-blocking send, just switch back to blocking mode to
+                // get the work done.
+                if (sent < r) {
+                    set_blocking(s);
+                    while (sent < r) {
+                        int k = sendmmsg(s, &msgs[sent], r - sent, 0);
+                        if (k < 0) {
+                            if (errno == EINTR) continue;
+                            break;
+                        }
+                        sent += k;
+                    }
+                    set_nonblocking(s);
+                }
+
                 for (int j = 0; j < r; j++)
                     iovecs[j].iov_len = MSG_SIZE;
             }
