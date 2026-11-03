@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-TS_AUTOBENCH_VERSION = main
+TS_AUTOBENCH_VERSION = lesley
 TS_AUTOBENCH_SITE = https://github.com/au-ts/autobench/archive/refs/heads
 TS_AUTOBENCH_SOURCE = $(TS_AUTOBENCH_VERSION).tar.gz
 TS_AUTOBENCH_SITE_METHOD = wget
