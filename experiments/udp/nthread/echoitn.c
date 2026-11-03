@@ -11,6 +11,9 @@
 #include <stdint.h>
 #include <unistd.h>
 
+// largest possible UDP payload, so no datagram is ever truncated
+#define MAX_UDP_MSG 65536
+
 static void setbufsize(int sock, int size)
 {
     setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &size, sizeof size);
@@ -19,15 +22,20 @@ static void setbufsize(int sock, int size)
 void* echo_function(void* arg)
 {
     int sock = *(int*)arg;
-    char buf[2000];
+    char* buf = malloc(MAX_UDP_MSG);
     struct sockaddr_in sa;
     socklen_t sa_len;
     ssize_t msglen;
 
+    if (buf == NULL) {
+        perror("malloc");
+        exit(1);
+    }
+
     for (;;) {
         sa_len = sizeof sa;
-        msglen = recvfrom(sock, buf, sizeof buf, 0, (struct sockaddr *)&sa, &sa_len);
-        if (msglen > 0) {
+        msglen = recvfrom(sock, buf, MAX_UDP_MSG, 0, (struct sockaddr *)&sa, &sa_len);
+        if (msglen >= 0) {
             sendto(sock, buf, msglen, 0, (struct sockaddr *)&sa, sa_len);
         }
     }
@@ -146,4 +154,3 @@ int main(int argc, const char* argv[])
     close(sock);
     return 0;
 }
-
