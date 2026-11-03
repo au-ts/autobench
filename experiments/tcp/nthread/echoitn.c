@@ -125,7 +125,7 @@ static void accept_new_connections(void)
 
         char ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &conn_sa.sin_addr, ip, sizeof ip);
-        printf("tcp_echo[%s:%d]: accept\n", ip, conn_sa.sin_port);
+        printf("tcp_echo[%s:%d]: accept\n", ip, ntohs(conn_sa.sin_port));
 
         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, conn_sock, &(struct epoll_event){
                 .events = CONN_EVENTS,
@@ -156,11 +156,13 @@ static void* worker_loop(void* arg)
 
             if (fd == listen_sock) {
                 accept_new_connections();
-            } else if (events[i].events & (EPOLLRDHUP | EPOLLHUP)) {
+            } else if (events[i].events & EPOLLIN) {
+                // echo whatever arrived before hangup .. recv() returning
+                // then drops the connection.
+                on_recv_available(fd);
+            } else if (events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
                 printf("tcp_echo: disconnect\n");
                 drop_connection(fd);
-            } else if (events[i].events & EPOLLIN) {
-                on_recv_available(fd);
             }
         }
     }
@@ -297,4 +299,3 @@ int main(int argc, const char* argv[])
     close(listen_sock);
     return 0;
 }
-

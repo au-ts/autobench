@@ -13,6 +13,9 @@
 #include <poll.h>
 #include <signal.h>
 
+// largest possible UDP payload, so no datagram is ever truncated
+#define MAX_UDP_MSG 65536
+
 static volatile sig_atomic_t stop_flag = 0;
 
 static void setbufsize(int sock, int size)
@@ -29,7 +32,7 @@ static void signal_handler(int sig)
 /* echo process: echo until parent dies*/
 static int echo_function(int sock, int parent_death_fd)
 {
-    char buf[2000];
+    static char buf[MAX_UDP_MSG];
     struct sockaddr_in sa;
     socklen_t sa_len;
     ssize_t msglen;
@@ -56,10 +59,13 @@ static int echo_function(int sock, int parent_death_fd)
         }
 
         if (fds[0].revents & POLLIN) {
+            /* Every child wakes for each datagram but only one gets it. A
+               blocking recvfrom() would park the rest here, where they can
+               no longer see the parent die and keep holding the port. */
             sa_len = sizeof sa;
-            msglen = recvfrom(sock, buf, sizeof buf, 0,
+            msglen = recvfrom(sock, buf, sizeof buf, MSG_DONTWAIT,
                               (struct sockaddr *)&sa, &sa_len);
-            if (msglen > 0) {
+            if (msglen >= 0) {
                 sendto(sock, buf, msglen, 0,
                        (struct sockaddr *)&sa, sa_len);
             }
@@ -230,4 +236,3 @@ int main(int argc, const char* argv[])
     close(sock);
     return 0;
 }
-
