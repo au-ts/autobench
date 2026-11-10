@@ -242,7 +242,7 @@ buffer_pool_t *setup_bufs(struct io_uring *rp) {
     static buffer_pool_t pool;
     pool = setup_buffer_pool(rp, BUFSIZ, NBUFS);
     register_buffer_pool(rp, &pool);
-    return &pool;    
+    return &pool;
 }
 
 void server_loop(struct io_uring *rp, int server_socket, buffer_pool_t *pool) {
@@ -257,18 +257,17 @@ void server_loop(struct io_uring *rp, int server_socket, buffer_pool_t *pool) {
     sqe->buf_group = 0;
 
     io_uring_register_files(&ring, &server_socket, 1);
-       
+
     msg.msg_namelen = sizeof(struct sockaddr_storage);
     msg.msg_controllen = 0;
 
     prep_recv_multishot(rp, &msg, 0);
-    
+
     if (io_uring_submit(&ring) < 0) {
         perror("Failed to submit SQE");
         exit(1);
     }
     for (;;) {
-        char * pkt;
         size_t cqe_count;
         size_t cpq;
         int    buf_consumed;
@@ -326,6 +325,6 @@ int main() {
     io_uring_queue_init(QUEUE_DEPTH, &ring, 0);
     poolp = setup_bufs(&ring);
     server_loop(&ring, server_socket, poolp);
- 
+
    return 0;
 }
